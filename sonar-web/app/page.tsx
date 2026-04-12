@@ -341,69 +341,6 @@ function Modal({ title, content, onClose }: { title: string; content: string; on
   )
 }
 
-// ─── Sessions Sidebar ─────────────────────────────────────────────────────────
-
-function SessionsSidebar({
-  sessions,
-  activeId,
-  loading,
-  onSelect,
-  onNewSession,
-  onClose,
-}: {
-  sessions: SessionMeta[]
-  activeId: string
-  loading: boolean
-  onSelect: (id: string) => void
-  onNewSession: () => void
-  onClose: () => void
-}) {
-  return (
-    <div className="flex flex-col h-full bg-zinc-950 border-r border-zinc-900 w-64 shrink-0">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-900">
-        <span className="text-xs font-mono uppercase tracking-widest text-zinc-500">Sessions</span>
-        <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors text-lg leading-none">×</button>
-      </div>
-
-      <button
-        onClick={onNewSession}
-        className="mx-3 mt-3 py-2 rounded-lg border border-zinc-800 text-xs text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-colors"
-      >
-        + New Session
-      </button>
-
-      <div className="flex-1 overflow-y-auto mt-2 px-2 pb-4">
-        {loading && (
-          <p className="text-zinc-600 text-xs text-center mt-6">Loading sessions…</p>
-        )}
-        {!loading && sessions.length === 0 && (
-          <p className="text-zinc-700 text-xs text-center mt-6">No past sessions yet.</p>
-        )}
-        {sessions.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onSelect(s.id)}
-            className={`w-full text-left rounded-lg px-3 py-2.5 mb-1 transition-colors group ${
-              s.id === activeId
-                ? 'bg-zinc-800 border border-zinc-700'
-                : 'hover:bg-zinc-900 border border-transparent'
-            }`}
-          >
-            <p className={`text-xs truncate leading-snug ${s.id === activeId ? 'text-white' : 'text-zinc-300'}`}>
-              {s.firstQuery || 'Untitled session'}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-zinc-600 text-xs">{timeAgo(s.updatedAt)}</span>
-              <span className="text-zinc-700 text-xs">·</span>
-              <span className="text-zinc-600 text-xs">{Math.floor(s.messageCount / 2)} turn{Math.floor(s.messageCount / 2) !== 1 ? 's' : ''}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -415,12 +352,13 @@ export default function Home() {
 
   // Session management
   const [activeSessionId, setActiveSessionId] = useState<string>('')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [sessions, setSessions] = useState<SessionMeta[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [isHistoryView, setIsHistoryView] = useState(false)
 
   const feedEndRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const textBufferRef = useRef<string>('')
   const textIdRef = useRef<string>('')
   const abortRef = useRef<AbortController | null>(null)
@@ -447,12 +385,24 @@ export default function Home() {
     }
   }, [])
 
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarOpen((prev) => {
+  const handleToggleDropdown = useCallback(() => {
+    setDropdownOpen((prev) => {
       if (!prev) fetchSessions()
       return !prev
     })
   }, [fetchSessions])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdownOpen])
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (id === activeSessionId && !isHistoryView) return
@@ -573,8 +523,6 @@ export default function Home() {
               setFeedItems((prev) => [...prev, { kind: 'error', id: `err-${Date.now()}`, message: event.message }])
             } else if (event.type === 'done') {
               flushTextBuffer()
-              // Refresh session list if sidebar is open
-              if (sidebarOpen) fetchSessions()
             }
           }
         }
@@ -587,24 +535,17 @@ export default function Home() {
         setIsStreaming(false)
       }
     },
-    [query, isStreaming, activeSessionId, sidebarOpen, fetchSessions, flushTextBuffer],
+    [query, isStreaming, activeSessionId, fetchSessions, flushTextBuffer],
   )
 
   return (
     <div className="flex flex-col h-screen bg-black text-white overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-900 shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleToggleSidebar}
-            className={`text-zinc-500 hover:text-zinc-300 transition-colors mr-1 text-sm ${sidebarOpen ? 'text-zinc-300' : ''}`}
-            title="Sessions"
-          >
-            ☰
-          </button>
-          <span className="text-xl font-bold tracking-widest text-white">SONAR</span>
-          <span className="text-xs text-zinc-600 uppercase tracking-wider">A&R Intelligence</span>
-        </div>
+      <header className="h-12 border-b border-border flex items-center justify-between px-4 shrink-0">
+        <h1 className="text-lg font-bold tracking-tight">
+          <span className="text-gradient">SONAR</span>
+          <span className="text-xs font-medium tracking-[0.15em] text-muted-foreground ml-2">A&R INTELLIGENCE</span>
+        </h1>
         <div className="flex items-center gap-3">
           {isHistoryView && (
             <span className="text-xs text-amber-500 border border-amber-900 bg-amber-950/30 rounded px-2 py-0.5">
@@ -622,24 +563,62 @@ export default function Home() {
 
       {/* Body */}
       <div className="flex flex-1 min-h-0">
-        {/* Sessions sidebar */}
-        {sidebarOpen && (
-          <SessionsSidebar
-            sessions={sessions}
-            activeId={activeSessionId}
-            loading={sessionsLoading}
-            onSelect={handleSelectSession}
-            onNewSession={() => { handleNewSession(); setSidebarOpen(false) }}
-            onClose={() => setSidebarOpen(false)}
-          />
-        )}
-
         {/* Main panels */}
         <div className="flex flex-1 min-h-0 divide-x divide-zinc-900">
           {/* Left: Agent Feed */}
-          <div className="w-[42%] flex flex-col min-h-0">
-            <div className="px-4 py-2 border-b border-zinc-900 shrink-0">
-              <h2 className="text-xs font-mono uppercase tracking-widest text-zinc-500">Agent Feed</h2>
+          <div className="w-1/2 flex flex-col min-h-0">
+            <div className="px-4 py-2 border-b border-zinc-900 shrink-0 relative" ref={dropdownRef}>
+              <button
+                onClick={handleToggleDropdown}
+                className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors max-w-full"
+              >
+                <span className="truncate">
+                  {sessions.find((s) => s.id === activeSessionId)?.firstQuery || 'New Session'}
+                </span>
+                <svg className={`w-3 h-3 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {dropdownOpen && (
+                <div className="absolute top-full left-0 mt-1 w-64 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <div className="p-2">
+                    <button
+                      onClick={() => { handleNewSession(); setDropdownOpen(false) }}
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                    >
+                      + New Session
+                    </button>
+                  </div>
+                  {sessionsLoading && (
+                    <p className="text-zinc-600 text-xs text-center py-4">Loading…</p>
+                  )}
+                  {!sessionsLoading && sessions.length === 0 && (
+                    <p className="text-zinc-700 text-xs text-center py-4">No past sessions.</p>
+                  )}
+                  {!sessionsLoading && sessions.length > 0 && (
+                    <div className="border-t border-zinc-900 max-h-60 overflow-y-auto p-2">
+                      {sessions.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => { handleSelectSession(s.id); setDropdownOpen(false) }}
+                          className={`w-full text-left rounded-lg px-3 py-2.5 mb-1 transition-colors border ${
+                            s.id === activeSessionId ? 'bg-zinc-800 border-zinc-700' : 'border-transparent hover:bg-zinc-900'
+                          }`}
+                        >
+                          <p className={`text-xs truncate leading-snug ${s.id === activeSessionId ? 'text-white' : 'text-zinc-300'}`}>
+                            {s.firstQuery || 'Untitled session'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-zinc-600 text-xs">{timeAgo(s.updatedAt)}</span>
+                            <span className="text-zinc-700 text-xs">·</span>
+                            <span className="text-zinc-600 text-xs">{Math.floor(s.messageCount / 2)} turn{Math.floor(s.messageCount / 2) !== 1 ? 's' : ''}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 font-mono">
               {feedItems.length === 0 && !isStreaming && (
@@ -651,6 +630,55 @@ export default function Home() {
                 <FeedRow key={item.id} item={item} />
               ))}
               <div ref={feedEndRef} />
+            </div>
+            {/* Input */}
+            <div className="shrink-0 border-t border-zinc-900 px-4 py-3">
+              {isHistoryView ? (
+                <p className="text-xs text-zinc-500 text-center">
+                  Viewing a past session.{' '}
+                  <button
+                    onClick={() => setIsHistoryView(false)}
+                    className="text-zinc-300 underline underline-offset-2 hover:text-white transition-colors"
+                  >
+                    Continue
+                  </button>{' '}
+                  or{' '}
+                  <button
+                    onClick={handleNewSession}
+                    className="text-zinc-300 underline underline-offset-2 hover:text-white transition-colors"
+                  >
+                    new session
+                  </button>
+                  .
+                </p>
+              ) : (
+                <form onSubmit={handleSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Find emerging indie artists in London…"
+                    disabled={isStreaming}
+                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50 transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isStreaming || !query.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {isStreaming ? 'Scanning…' : 'Scan'}
+                  </button>
+                  {isStreaming && (
+                    <button
+                      type="button"
+                      onClick={() => abortRef.current?.abort()}
+                      className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 text-sm hover:border-zinc-600 hover:text-zinc-200 transition-colors shrink-0"
+                    >
+                      Stop
+                    </button>
+                  )}
+                </form>
+              )}
             </div>
           </div>
 
@@ -686,58 +714,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Search Bar */}
-      <div className="shrink-0 border-t border-zinc-900 px-4 py-3">
-        {isHistoryView ? (
-          <div className="flex gap-3 items-center max-w-5xl mx-auto">
-            <p className="flex-1 text-sm text-zinc-500 text-center">
-              Viewing a past session.{' '}
-              <button
-                onClick={() => setIsHistoryView(false)}
-                className="text-zinc-300 underline underline-offset-2 hover:text-white transition-colors"
-              >
-                Continue this session
-              </button>{' '}
-              or{' '}
-              <button
-                onClick={handleNewSession}
-                className="text-zinc-300 underline underline-offset-2 hover:text-white transition-colors"
-              >
-                start a new one
-              </button>
-              .
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex gap-3 items-center max-w-5xl mx-auto">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Find emerging indie artists in London with under 50K monthly listeners…"
-              disabled={isStreaming}
-              className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={isStreaming || !query.trim()}
-              className="px-5 py-3 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-            >
-              {isStreaming ? 'Scanning…' : 'Scan'}
-            </button>
-            {isStreaming && (
-              <button
-                type="button"
-                onClick={() => abortRef.current?.abort()}
-                className="px-4 py-3 rounded-xl border border-zinc-800 text-zinc-400 text-sm hover:border-zinc-600 hover:text-zinc-200 transition-colors shrink-0"
-              >
-                Stop
-              </button>
-            )}
-          </form>
-        )}
       </div>
 
       {/* Modal */}

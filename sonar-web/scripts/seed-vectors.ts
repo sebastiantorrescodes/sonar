@@ -19,7 +19,7 @@ import { storeArtistVector, ensureArtistIndex } from '../lib/vectorstore'
 import { getClient } from '../lib/redis'
 import type { ArtistCard } from '../lib/agent'
 
-const DELAY_MS = parseInt(process.env.SEED_DELAY_MS ?? '5000')
+const DELAY_MS = parseInt(process.env.SEED_DELAY_MS ?? '0')
 const KEY_PREFIX = 'sonar:artist:'
 
 // ─── Seed data ────────────────────────────────────────────────────────────────

@@ -688,12 +688,26 @@ export async function* runAgent(
 
   try {
     while (true) {
+      // Cache the system prompt and tools — both are large and never change
+      // between turns. Cache write on turn 1, cache read on every subsequent turn.
+      const cachedTools = tools.map((t, i) =>
+        i === tools.length - 1
+          ? { ...t, cache_control: { type: 'ephemeral' as const } }
+          : t,
+      )
+
       const stream = client.messages.stream({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
-        system: SYSTEM_PROMPT,
+        system: [
+          {
+            type: 'text',
+            text: SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
         messages,
-        tools,
+        tools: cachedTools,
       })
 
       // Accumulate input JSON for tool_use blocks indexed by stream position
