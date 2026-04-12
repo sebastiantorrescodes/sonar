@@ -1,0 +1,56 @@
+services:
+  redis:
+    image: redis/redis-stack:latest
+    container_name: sonar-redis
+    ports:
+      - "6379:6379"   # Redis (app connection)
+      - "8001:8001"   # RedisInsight (browser UI → localhost:8001)
+    environment:
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-sonar_dev}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-sonar_dev}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sonar-net
+
+  memory:
+    image: redislabs/agent-memory-server:latest
+    container_name: sonar-memory
+    ports:
+      - "8000:8000"   # Memory REST API
+      - "9050:9050"   # MCP server (optional)
+    environment:
+      # Redis — reference the redis service by name inside the Docker network
+      - REDIS_URL=redis://default:${REDIS_PASSWORD:-sonar_dev}@redis:6379
+      # LLM — Claude for summarisation and topic extraction
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GENERATION_MODEL=claude-3-5-haiku-20241022
+      # Embeddings — Voyage AI (Anthropic-recommended pairing for Claude)
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - EMBEDDING_MODEL=voyage/voyage-3
+      # voyage-3 outputs 1024-dim embeddings (server defaults to 1536 which causes search misses)
+      - REDISVL_VECTOR_DIMENSIONS=1024
+      # Features
+      - LONG_TERM_MEMORY=true
+      - ENABLE_TOPIC_EXTRACTION=true
+      - ENABLE_NER=true
+      # Disable auth for local dev
+      - DISABLE_AUTH=true
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sonar-net
+
+networks:
+  sonar-net:
+    driver: bridge
+
+volumes:
+  redis_data:
